@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image ↔ Code Converter (22×33 grid)</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f9f9f9; color: #222; text-align: center; padding: 2rem; }
+  h1 { margin-bottom: 1rem; }
+  input, textarea, button { margin: 0.5rem; padding: 0.5rem; font-size: 1rem; }
+  canvas { margin-top: 1rem; background: #eee; image-rendering: pixelated; }
+  textarea { width: 90%; height: 5rem; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<h1>🧩 Image ↔ Code Converter</h1>
+<p>Upload a 22×33 (or any) image to encode, or paste a 121-character string to decode.</p>
+
+<!-- Encode section -->
+<h2>Encode Image → String</h2>
+<input type="file" id="upload" accept="image/*"><br>
+<textarea id="output" readonly placeholder="Encoded string will appear here..."></textarea>
+
+<!-- Decode section -->
+<h2>Decode String → Image</h2>
+<textarea id="inputString" placeholder="Paste 121-character string here..."></textarea><br>
+<button id="decodeBtn">Decode</button><br>
+<canvas id="canvas" width="220" height="330"></canvas>
+
+<script>
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function encodeImage(img) {
+  // Create offscreen canvas and resize to 22x33
+  const w = 22, h = 33;
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const ctx = off.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let result = "";
+
+  for (let by = 0; by < h; by += 3) {
+    for (let bx = 0; bx < w; bx += 2) {
+      let blockValue = 0, bit = 0;
+      for (let y = 0; y < 3; y++) {
+        for (let x = 0; x < 2; x++) {
+          const idx = ((by + y) * w + (bx + x)) * 4;
+          const r = data[idx], g = data[idx+1], b = data[idx+2];
+          const brightness = (r + g + b) / 3;
+          if (brightness < 128) blockValue |= (1 << bit);
+          bit++;
+        }
+      }
+      blockValue = 63 - blockValue;
+      result += alphabet[blockValue];
+    }
+  }
+  return result;
+}
+
+function decodeStringToCanvas(code, canvas) {
+  const w = 22, h = 33;
+  if (code.length !== 121) { alert("Invalid string length — must be 121 characters."); return; }
+
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(w, h);
+  const data = imageData.data;
+
+  let index = 0;
+  for (let by = 0; by < h; by += 3) {
+    for (let bx = 0; bx < w; bx += 2) {
+      let val = alphabet.indexOf(code[index++]);
+      val = 63 - val;
+      let bit = 0;
+      for (let y = 0; y < 3; y++) {
+        for (let x = 0; x < 2; x++) {
+          const on = (val >> bit) & 1;
+          const idx = ((by + y) * w + (bx + x)) * 4;
+          const col = on ? 0 : 255;
+          data[idx] = data[idx+1] = data[idx+2] = col;
+          data[idx+3] = 255;
+          bit++;
+        }
+      }
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  // upscale for visibility
+  canvas.style.width = (w*10) + "px";
+  canvas.style.height = (h*10) + "px";
+}
+
+document.getElementById('upload').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const code = encodeImage(img);
+    document.getElementById('output').value = code;
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+document.getElementById('decodeBtn').addEventListener('click', () => {
+  const code = document.getElementById('inputString').value.trim();
+  const canvas = document.getElementById('canvas');
+  decodeStringToCanvas(code, canvas);
+});
+</script>
+
+</body>
+</html>
